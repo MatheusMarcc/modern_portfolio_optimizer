@@ -1,6 +1,6 @@
 # Portfolio Optimizer
 
-A professional portfolio optimization tool implementing **Markowitz Mean-Variance** and **Black-Litterman** models with Monte Carlo simulation for risk assessment.
+A professional portfolio optimization tool implementing **Markowitz Mean-Variance** and **Black-Litterman** models with Monte Carlo simulation for risk assessment. You can acess it via: https://modernportfoliooptimizer0.streamlit.app/
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.31+-red.svg)
