@@ -324,7 +324,7 @@ ativos_selecionados = st.sidebar.multiselect(
     format_func=lambda x: ativos_disponiveis[x]
 )
 
-anos = st.sidebar.slider("Historical period (years)", 1, 10, 5)
+anos = st.sidebar.slider("Historical period (years)", 1, 10, 3)
 end_date = datetime.now()
 start_date = end_date - timedelta(days=anos*365)
 
@@ -451,7 +451,8 @@ def otimizar(mu, Sigma, max_w, rf):
         'sharpe': (w @ mu - rf) / np.sqrt(w @ Sigma @ w)
     }
 
-def fronteira_eficiente(mu, Sigma, rf, n_pontos=50):
+@st.cache_data
+def fronteira_eficiente(mu, Sigma, rf, n_pontos=20):
     """Calculate efficient frontier"""
     ret_min = mu.min()
     ret_max = mu.max()
@@ -839,9 +840,10 @@ if processar and len(ativos_selecionados) >= 2:
         tab1, tab2, tab3 = st.tabs(["Efficient Frontier", "Correlation Matrix", "Historical Performance"])
         
         with tab1:
-            st.subheader("Efficient Frontier")
-            
-            rets_front, vols_front = fronteira_eficiente(mu_final, Sigma, rf)
+            with st.spinner("📊 Rendering Efficient Frontier chart..."):
+                st.subheader("Efficient Frontier")
+                
+                rets_front, vols_front = fronteira_eficiente(mu_final, Sigma, rf)
             
             fig_front = go.Figure()
             
@@ -884,7 +886,8 @@ if processar and len(ativos_selecionados) >= 2:
         tab2, tab3 = st.tabs(["Correlation Matrix", "Historical Performance"])
     
     with tab2:
-        st.subheader("Correlation Matrix")
+        with st.spinner("📊 Rendering Correlation Matrix..."):
+            st.subheader("Correlation Matrix")
         
         st.info("""
         **Why correlation matters:**
@@ -897,32 +900,6 @@ if processar and len(ativos_selecionados) >= 2:
         """)
         
         corr_matrix = returns[validos].corr()
-        
-        annotations = []
-        for i, ticker_i in enumerate(validos):
-            for j, ticker_j in enumerate(validos):
-                corr_val = corr_matrix.iloc[i, j]
-                
-                if ticker_i in ativos_no_portfolio and ticker_j in ativos_no_portfolio:
-                    if corr_val > 0.7:
-                        text_color = '#0a0a0a'
-                    else:
-                        text_color = '#ffffff'
-                    weight = 'bold'
-                else:
-                    if corr_val > 0.7:
-                        text_color = '#333333'
-                    else:
-                        text_color = '#e5e5e5'
-                    weight = 'normal'
-                
-                annotations.append(dict(
-                    x=j,
-                    y=i,
-                    text=f'{corr_val:.2f}',
-                    font=dict(size=10, color=text_color, family='Helvetica Neue'),
-                    showarrow=False
-                ))
         
         fig_corr = go.Figure(data=go.Heatmap(
             z=corr_matrix.values,
@@ -938,6 +915,9 @@ if processar and len(ativos_selecionados) >= 2:
                 title=dict(text="Correlation", side="right"),
                 tickfont=dict(color='#e5e5e5')
             ),
+            text=corr_matrix.values.round(2),
+            texttemplate='%{text}',
+            textfont=dict(size=10, color='#e5e5e5'),
             hovertemplate='%{y} vs %{x}: %{z:.3f}<extra></extra>'
         ))
         
@@ -947,8 +927,7 @@ if processar and len(ativos_selecionados) >= 2:
             font=dict(family='Helvetica Neue, Arial', size=11, color='#e5e5e5'),
             height=500,
             xaxis=dict(showgrid=False, color='#999999'),
-            yaxis=dict(showgrid=False, color='#999999'),
-            annotations=annotations
+            yaxis=dict(showgrid=False, color='#999999')
         )
         
         st.plotly_chart(fig_corr, use_container_width=True, key="corr")
@@ -961,7 +940,8 @@ if processar and len(ativos_selecionados) >= 2:
                 st.markdown(f"- {ativos_disponiveis[ticker]}: {peso:.1%}")
     
     with tab3:
-        st.subheader("Historical Performance")
+        with st.spinner("📊 Rendering Historical Performance charts..."):
+            st.subheader("Historical Performance")
         
         st.info("""
         **Base 100 normalization:**
