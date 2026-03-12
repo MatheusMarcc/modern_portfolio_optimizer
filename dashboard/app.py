@@ -333,7 +333,7 @@ max_peso = st.sidebar.slider("Maximum weight per asset (%)", 10, 100, 35) / 100
 rf = st.sidebar.number_input("Risk-free rate (% p.a.)", 0.0, 50.0, 2.0, 0.5) / 100
 
 st.sidebar.subheader("Simulation")
-n_sim = st.sidebar.number_input("Monte Carlo simulations", 100, 50000, 10000, 1000)
+n_sim = st.sidebar.number_input("Monte Carlo simulations", 100, 50000, 5000, 500)
 inv = st.sidebar.number_input("Initial investment (BRL)", 100.0, 10000000.0, 10000.0, 100.0)
 
 usar_cache = st.sidebar.checkbox("Use data cache", value=True)
@@ -343,7 +343,7 @@ def get_cache_file(tickers, start, end):
     key = f"{'_'.join(sorted(tickers))}_{start.date()}_{end.date()}"
     return os.path.join(CACHE_DIR, f"prices_{hashlib.md5(key.encode()).hexdigest()[:12]}.csv")
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache por 1 hora
 def baixar_dados(tickers, start, end, use_cache):
     cache_file = get_cache_file(tickers, start, end)
     
@@ -476,12 +476,22 @@ def fronteira_eficiente(mu, Sigma, rf, n_pontos=50):
     return rets_target, np.array(vols)
 
 def monte_carlo(w, mu, Sigma, n_sim, inv):
-    mu_d, Sigma_d = mu / 252, Sigma / 252
-    vals = np.zeros(n_sim)
+    import time
+    start = time.time()
     
-    for i in range(n_sim):
-        ret = np.random.multivariate_normal(mu_d, Sigma_d, 252) @ w
-        vals[i] = inv * np.prod(1 + ret)
+    mu_d, Sigma_d = mu / 252, Sigma / 252
+    
+    # Gerar TODAS as simulações de uma vez (vetorizado)
+    returns = np.random.multivariate_normal(mu_d, Sigma_d, (n_sim, 252))
+    
+    # Calcular retornos do portfólio para todas simulações
+    portfolio_returns = returns @ w  # (n_sim, 252)
+    
+    # Calcular valor final para cada simulação
+    vals = inv * np.prod(1 + portfolio_returns, axis=1)
+    
+    elapsed = time.time() - start
+    print(f"✅ Monte Carlo vetorizado: {n_sim} sims em {elapsed:.2f}s")
     
     return vals
 
@@ -618,7 +628,7 @@ processar = st.button("Optimize Portfolio", type="primary")
 
 if processar and len(ativos_selecionados) >= 2:
     
-    with st.spinner('Loading data...'):
+    with st.spinner(f'⏳ Downloading {len(ativos_selecionados)} assets... Please wait (first time may take 30-60s)'):
         prices = baixar_dados(ativos_selecionados, start_date, end_date, usar_cache)
     
     validos, invalidos = validar_dados(prices, ativos_selecionados, ativos_disponiveis)
@@ -740,7 +750,8 @@ if processar and len(ativos_selecionados) >= 2:
     # Monte Carlo
     st.markdown("### Monte Carlo Simulation")
     
-    with st.spinner(f'Simulating {int(n_sim):,} scenarios...'):
+    estimated_time = max(1, int(n_sim / 10000))  # ~10k simulações por segundo após otimização
+    with st.spinner(f'🎲 Running {int(n_sim):,} simulations... (~{estimated_time} second{"s" if estimated_time > 1 else ""})'):
         vals = monte_carlo(portfolio['pesos'], mu_final, Sigma, int(n_sim), inv)
     
     VaR = np.percentile(vals, 5)
